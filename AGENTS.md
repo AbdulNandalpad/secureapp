@@ -128,10 +128,60 @@ and it reaches the database **only** through a single Data Access Layer. The rul
 - Effort via `output_config: {effort: ...}`.
 - Env: `ANTHROPIC_API_KEY` in `.env.local`.
 
+## Scanner — engine-agnostic core
+
+The scanner is built around a **pluggable engine**: the platform never calls a scanner
+directly, it drives the `ScanEngine` interface. Any engine (built-in prober, OWASP ZAP,
+Nuclei, a hosted API, an AI analyzer) implements the interface and registers itself —
+swapping engines is config, not a rewrite.
+
+### Layers
+- `src/lib/scan/engine.ts` — the **`ScanEngine` interface** + `ScanEvent`/`ScanContext`.
+  An engine yields an async stream of `progress` / `finding` / `done` events.
+- `src/lib/scan/engines/<name>.ts` — engine implementations. Current: `stub.ts`
+  (illustrative findings, no real probing — **placeholder for the ZAP adapter**).
+- `src/lib/scan/registry.ts` — `getEngine(id)` / `listEngines()`. Register new engines here.
+- `src/lib/scan/orchestrator.ts` — `runScan()`: create scan row → consume engine stream →
+  score → compute delta → persist → return result. Same loop for every engine.
+- `src/lib/scan/score.ts` — `summarize()` → severity counts + 0–100 score + A–F grade.
+- `src/lib/scan/delta.ts` — `fingerprint()` (check_id + URL path + parameter) and
+  `computeDelta()` → new/persisting/fixed. This powers **"what changed?"**.
+- `src/lib/scan/target.ts` — `validateTarget()`: SSRF guard (blocks loopback/private/metadata).
+- `src/lib/dal/scans.ts` — DAL for `scans`/`findings` (RLS-enforced; the only DB access).
+
+### API
+- `POST /api/scan` — start a scan. Auth-gated. Requires `{ targetUrl, authorized: true }`
+  (the user must attest authorization); optional `engineId`, `config`. Runs synchronously
+  for in-process engines.
+- `GET /api/scan` — list the user's scans. `GET /api/scan/[id]` — one scan + findings.
+
+### AI tools (the four questions, answered conversationally)
+`list_scans`, `get_latest_scan`, `get_scan` are registered in `src/lib/ai/tools.ts`, so the
+agent answers: what changed (delta) · what's urgent (summary) · why it matters (CVSS/CWE/
+impact) · what to do next (remediation). Scans are **started by humans only** (authorization
+attestation is not delegated to the agent).
+
+### The four questions → mechanism
+- **What changed?** `scan.delta` + per-finding `deltaStatus` (fingerprint match vs prior scan).
+- **What's urgent?** `summary` counts + severity sort; red highlight via `SEVERITY_CONFIG`.
+- **Why does it matter?** `Finding.cvss/cwe/standards/impact/references`.
+- **What do I do next?** `Finding.remediation` + `codeExample`.
+
+### Adding the real OWASP ZAP engine (Phase 2)
+ZAP needs a reachable daemon (public URL + API key). Implement `ScanEngine` in
+`src/lib/scan/engines/zap.ts` (start spider+ascan, poll status, map ZAP alerts →
+`EngineFinding`), register it, and read `ZAP_API_URL` / `ZAP_API_KEY` from env. `needsWorker`
+engines run async (poll/callback) instead of the synchronous path. **No UI/DAL/tool change.**
+
+### Schema
+`scans` + `findings` (with `fingerprint`, RLS, indexes) are in `supabase/schema.sql` —
+**re-run it in the Supabase SQL editor** to create them.
+
 ## Not built yet (the roadmap)
-- Real scan engine / backend that actually probes a target
-- API routes (`src/app/api/*`) — none exist
-- Persisting scans/findings to the DB (schema beyond `profiles`); History/Dashboard still mock
+- **Real scan engine** — current engine is the `stub` (illustrative findings, no probing).
+  The OWASP ZAP adapter is the next engine (see Scanner → Adding the real OWASP ZAP engine).
+- **UI wiring** — `ScanForm`/`ScanProgress`/`ResultsDashboard`/Dashboard/History still read
+  `mock-data.ts`. Next increment: point them at `POST /api/scan` and `GET /api/scan[/id]`.
 - Report generation (PDF / JSON / HTML / CSV) — `Report` type exists, no implementation
 - Alerts and Settings views
 

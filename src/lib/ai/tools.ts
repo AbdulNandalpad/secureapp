@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { getMyProfile, updateMyProfile } from "@/lib/dal/profiles";
+import { listScans, getLatestScan, getScan } from "@/lib/dal/scans";
 
 // AI tool layer — the AI's interface to the database.
 //
@@ -41,6 +42,37 @@ export const TOOL_DEFS: Anthropic.Tool[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: "list_scans",
+    description:
+      "List the user's recent security scans (target, status, grade, severity " +
+      "counts, and the new/fixed delta). Call this when the user asks about their " +
+      "scan history or wants an overview across scans.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "get_latest_scan",
+    description:
+      "Get the user's most recent completed scan in full: summary (grade, " +
+      "severity counts), the delta vs the previous scan (what changed), and all " +
+      "findings (each with CVSS, CWE, impact, and remediation). Call this to " +
+      "answer what's urgent, what changed, why it matters, or what to do next.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "get_scan",
+    description:
+      "Get one specific scan by id, with its full findings. Use after list_scans " +
+      "when the user asks about a particular scan.",
+    input_schema: {
+      type: "object",
+      properties: {
+        scan_id: { type: "string", description: "The scan's id." },
+      },
+      required: ["scan_id"],
+      additionalProperties: false,
+    },
+  },
 ];
 
 // Maps a tool name + input to its DAL call. Returns a JSON-serializable result.
@@ -58,6 +90,15 @@ export async function executeTool(
       return await updateMyProfile(ctx.supabase, ctx.userId, {
         full_name: String(input.full_name ?? ""),
       });
+
+    case "list_scans":
+      return await listScans(ctx.supabase, ctx.userId);
+
+    case "get_latest_scan":
+      return await getLatestScan(ctx.supabase, ctx.userId);
+
+    case "get_scan":
+      return await getScan(ctx.supabase, ctx.userId, String(input.scan_id ?? ""));
 
     default:
       throw new Error(`Unknown tool: ${name}`);

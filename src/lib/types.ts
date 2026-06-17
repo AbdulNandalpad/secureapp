@@ -39,6 +39,8 @@ export interface Finding {
   references: string[];
   cvss?: number;
   cwe?: string;
+  // Set when this finding is compared against the previous scan of the same target.
+  deltaStatus?: "new" | "persisting" | "fixed";
 }
 
 export interface ScanConfig {
@@ -83,6 +85,9 @@ export interface ScanResult {
   pagesScanned: number;
   requestsMade: number;
   duration: number;
+  engineId?: string;
+  // "What changed?" vs the previous scan of the same target.
+  delta?: { new: number; persisting: number; fixed: number };
 }
 
 export interface Report {
