@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { runScan } from "@/lib/scan/orchestrator";
+import { startScan } from "@/lib/scan/orchestrator";
 import { validateTarget } from "@/lib/scan/target";
 import { DEFAULT_ENGINE_ID } from "@/lib/scan/registry";
 import { listScans } from "@/lib/dal/scans";
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await runScan(supabase, user.id, {
+    const result = await startScan(supabase, user.id, {
       targetUrl: target.url,
       engineId: body.engineId ?? DEFAULT_ENGINE_ID,
       config: buildConfig(target.url, body.config),

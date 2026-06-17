@@ -76,6 +76,53 @@ function mapScan(row: Record<string, unknown>, findings: Finding[]): ScanResult 
   };
 }
 
+// Lightweight row used by the orchestrator to advance async (worker) scans.
+export interface ScanMeta {
+  id: string;
+  status: string;
+  engineId: string;
+  targetUrl: string;
+  engineState: Record<string, unknown> | null;
+  startedAt: string;
+}
+
+export async function getScanMeta(
+  supabase: SupabaseClient,
+  userId: string,
+  scanId: string
+): Promise<ScanMeta | null> {
+  const { data, error } = await supabase
+    .from("scans")
+    .select("id, status, engine_id, target_url, engine_state, started_at")
+    .eq("user_id", userId)
+    .eq("id", scanId)
+    .maybeSingle();
+  if (error) throw new Error(`getScanMeta failed: ${error.message}`);
+  if (!data) return null;
+  return {
+    id: data.id as string,
+    status: data.status as string,
+    engineId: data.engine_id as string,
+    targetUrl: data.target_url as string,
+    engineState: (data.engine_state as Record<string, unknown>) ?? null,
+    startedAt: data.started_at as string,
+  };
+}
+
+export async function setEngineState(
+  supabase: SupabaseClient,
+  userId: string,
+  scanId: string,
+  state: Record<string, unknown>
+): Promise<void> {
+  const { error } = await supabase
+    .from("scans")
+    .update({ engine_state: state })
+    .eq("id", scanId)
+    .eq("user_id", userId);
+  if (error) throw new Error(`setEngineState failed: ${error.message}`);
+}
+
 export async function createScan(
   supabase: SupabaseClient,
   userId: string,

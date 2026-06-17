@@ -31,3 +31,32 @@ export interface ScanEngine {
   capabilities: EngineCapabilities;
   scan(config: ScanConfig, ctx: ScanContext): AsyncIterable<ScanEvent>;
 }
+
+// Opaque provider state persisted on the scan row between poll calls
+// (e.g. ZAP spider/active-scan ids + current phase).
+export type EngineHandle = Record<string, unknown>;
+
+export interface EnginePollResult {
+  status: "running" | "done" | "error";
+  handle: EngineHandle; // possibly-updated state to persist
+  progress?: ScanProgress;
+  error?: string;
+}
+
+// For long-running engines (`needsWorker: true`, e.g. OWASP ZAP) that can't
+// finish inside one serverless invocation. The orchestrator calls `start` on
+// POST, then `poll` on each GET until done, then `collect` once to pull findings.
+export interface AsyncScanEngine {
+  id: string;
+  name: string;
+  capabilities: EngineCapabilities;
+  start(config: ScanConfig, ctx: ScanContext): Promise<EngineHandle>;
+  poll(handle: EngineHandle, ctx: ScanContext): Promise<EnginePollResult>;
+  collect(handle: EngineHandle, ctx: ScanContext): Promise<EngineFinding[]>;
+}
+
+export type AnyEngine = ScanEngine | AsyncScanEngine;
+
+export function isAsyncEngine(e: AnyEngine): e is AsyncScanEngine {
+  return typeof (e as AsyncScanEngine).start === "function";
+}

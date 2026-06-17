@@ -167,19 +167,30 @@ attestation is not delegated to the agent).
 - **Why does it matter?** `Finding.cvss/cwe/standards/impact/references`.
 - **What do I do next?** `Finding.remediation` + `codeExample`.
 
-### Adding the real OWASP ZAP engine (Phase 2)
-ZAP needs a reachable daemon (public URL + API key). Implement `ScanEngine` in
-`src/lib/scan/engines/zap.ts` (start spider+ascan, poll status, map ZAP alerts →
-`EngineFinding`), register it, and read `ZAP_API_URL` / `ZAP_API_KEY` from env. `needsWorker`
-engines run async (poll/callback) instead of the synchronous path. **No UI/DAL/tool change.**
+### Async (worker) engines — OWASP ZAP
+Long-running engines (`needsWorker: true`) can't finish inside one serverless call, so they
+implement **`AsyncScanEngine`** (`start` / `poll` / `collect`) instead of the streaming
+`scan()`. The orchestrator drives them across requests:
+- `POST /api/scan` → `startScan()` calls `engine.start()` (kick off), stores the returned
+  handle in `scans.engine_state`, returns immediately with status `running`.
+- each `GET /api/scan/:id` → `advanceScan()` calls `engine.poll()`; when it reports `done`,
+  `engine.collect()` pulls findings and the scan is finalized (delta + summary + persist).
+- The client polls `GET /api/scan/:id` until status is `complete`/`error`.
+
+**`src/lib/scan/engines/zap.ts`** is the OWASP ZAP adapter: spider → active scan → pull
+alerts (`core/view/alerts`) → map to `EngineFinding`. Needs a reachable ZAP daemon via env
+**`ZAP_API_URL`** + **`ZAP_API_KEY`** (API key sent as `X-ZAP-API-Key` header). Select it per
+scan with `engineId: "zap"`; default remains the stub. Note: each poll is a quick status
+check; finalization happens on the poll that observes 100% — so a scan completes only while a
+client is polling (add a Vercel Cron later for unattended completion).
 
 ### Schema
 `scans` + `findings` (with `fingerprint`, RLS, indexes) are in `supabase/schema.sql` —
 **re-run it in the Supabase SQL editor** to create them.
 
 ## Not built yet (the roadmap)
-- **Real scan engine** — current engine is the `stub` (illustrative findings, no probing).
-  The OWASP ZAP adapter is the next engine (see Scanner → Adding the real OWASP ZAP engine).
+- **Host OWASP ZAP** — the `zap` engine is implemented but inert until a reachable ZAP
+  daemon is provided via `ZAP_API_URL`/`ZAP_API_KEY`. Default engine is still the `stub`.
 - **UI wiring** — `ScanForm`/`ScanProgress`/`ResultsDashboard`/Dashboard/History still read
   `mock-data.ts`. Next increment: point them at `POST /api/scan` and `GET /api/scan[/id]`.
 - Report generation (PDF / JSON / HTML / CSV) — `Report` type exists, no implementation

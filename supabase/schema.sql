@@ -68,6 +68,10 @@ create table if not exists public.scans (
   created_at    timestamptz not null default now()
 );
 
+-- engine_state holds worker-engine progress (e.g. ZAP spider/ascan ids) between
+-- polls. Added separately so re-running on an existing scans table picks it up.
+alter table public.scans add column if not exists engine_state jsonb;
+
 create index if not exists idx_scans_user_created on public.scans (user_id, created_at desc);
 create index if not exists idx_scans_user_target  on public.scans (user_id, target_url, created_at desc);
 
