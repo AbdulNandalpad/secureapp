@@ -1,5 +1,8 @@
 "use client";
-import { Bell, Search, User, ChevronDown } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Bell, Search, User, ChevronDown, LogOut } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 interface HeaderProps {
   title: string;
@@ -7,6 +10,35 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle }: HeaderProps) {
+  const router = useRouter();
+  const [email, setEmail] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+  }, []);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
+
+  const label = email ? email.split("@")[0] : "Account";
+
   return (
     <header className="h-16 bg-slate-900/80 backdrop-blur border-b border-slate-800 flex items-center px-6 gap-4 sticky top-0 z-20">
       <div className="flex-1">
@@ -30,13 +62,34 @@ export function Header({ title, subtitle }: HeaderProps) {
       </button>
 
       {/* User */}
-      <button className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer">
-        <div className="w-7 h-7 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-full flex items-center justify-center">
-          <User className="w-4 h-4 text-white" />
-        </div>
-        <span className="text-slate-300 text-sm hidden md:block">Abdul</span>
-        <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
-      </button>
+      <div className="relative" ref={menuRef}>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+        >
+          <div className="w-7 h-7 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-full flex items-center justify-center">
+            <User className="w-4 h-4 text-white" />
+          </div>
+          <span className="text-slate-300 text-sm hidden md:block">{label}</span>
+          <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+        </button>
+
+        {open && (
+          <div className="absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-xl overflow-hidden z-30">
+            <div className="px-4 py-3 border-b border-slate-800">
+              <p className="text-xs text-slate-500">Signed in as</p>
+              <p className="text-sm text-slate-200 truncate">{email ?? "—"}</p>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              Sign out
+            </button>
+          </div>
+        )}
+      </div>
     </header>
   );
 }
