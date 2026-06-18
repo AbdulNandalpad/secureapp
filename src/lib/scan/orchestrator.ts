@@ -108,7 +108,12 @@ export async function advanceScan(
   try {
     const res = await engine.poll(meta.engineState ?? {}, { userId });
     if (res.status === "running") {
-      await setEngineState(supabase, userId, scanId, res.handle);
+      // Persist progress alongside the handle so getScan can surface a live
+      // phase/percent to the UI between polls.
+      await setEngineState(supabase, userId, scanId, {
+        ...res.handle,
+        _progress: res.progress ?? null,
+      });
     } else if (res.status === "error") {
       await failScan(supabase, userId, scanId, res.error ?? "engine error");
     } else {

@@ -49,6 +49,11 @@ function mapFinding(row: Record<string, unknown>): Finding {
 
 function mapScan(row: Record<string, unknown>, findings: Finding[]): ScanResult {
   const status = row.status === "running" ? "scanning" : (row.status as ScanResult["status"]);
+  const engineState = (row.engine_state as Record<string, unknown> | null) ?? null;
+  const liveProgress =
+    status === "scanning" && engineState && engineState._progress
+      ? (engineState._progress as ScanResult["progress"])
+      : null;
   return {
     id: row.id as string,
     targetUrl: row.target_url as string,
@@ -57,10 +62,10 @@ function mapScan(row: Record<string, unknown>, findings: Finding[]): ScanResult 
     status,
     engineId: row.engine_id as string,
     config: (row.config as ScanConfig) ?? ({ targetUrl: row.target_url } as ScanConfig),
-    progress: {
+    progress: liveProgress ?? {
       phase: status === "complete" ? "Complete" : "Scanning",
-      current: 0,
-      total: 0,
+      current: status === "complete" ? 100 : 0,
+      total: 100,
       currentUrl: "",
       checksCompleted: [],
       checksRunning: [],

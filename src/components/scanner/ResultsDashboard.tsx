@@ -35,6 +35,18 @@ export function ResultsDashboard({ result, onRescan }: ResultsDashboardProps) {
 
   return (
     <div className="space-y-6">
+      {/* What changed? — delta vs the previous scan of this target */}
+      {result.delta && (
+        <div className="flex items-center gap-5 bg-slate-800/50 border border-slate-700 rounded-2xl px-6 py-3.5 text-sm flex-wrap">
+          <span className="text-slate-400 font-medium flex items-center gap-1.5">
+            <TrendingUp className="w-4 h-4" /> Since last scan
+          </span>
+          <span className="text-red-400 font-semibold">▲ {result.delta.new} new</span>
+          <span className="text-green-400 font-semibold">▼ {result.delta.fixed} fixed</span>
+          <span className="text-slate-400">● {result.delta.persisting} persisting</span>
+        </div>
+      )}
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Score */}
@@ -169,6 +181,11 @@ export function ResultsDashboard({ result, onRescan }: ResultsDashboardProps) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <SeverityBadge severity={finding.severity} />
+                      {finding.deltaStatus === "new" && (
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-red-400 bg-red-500/10 border border-red-500/20 rounded px-1.5 py-0.5">
+                          New
+                        </span>
+                      )}
                       <span className="text-xs text-slate-500">{finding.category}</span>
                       {finding.cvss && <span className="text-xs text-slate-500 font-mono">CVSS {finding.cvss}</span>}
                     </div>

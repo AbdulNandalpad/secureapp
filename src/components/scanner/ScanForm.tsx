@@ -1,13 +1,19 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Shield, Globe, ChevronDown, ChevronUp, Info, AlertTriangle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScanConfig, StandardCategory } from "@/lib/types";
 import { STANDARDS, VULNERABILITY_CHECKS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
+interface EngineOption {
+  id: string;
+  name: string;
+  capabilities?: { mode?: string[] };
+}
+
 interface ScanFormProps {
-  onStart: (config: ScanConfig) => void;
+  onStart: (input: { config: ScanConfig; authorized: boolean; engineId: string }) => void;
 }
 
 const DEFAULT_CONFIG: ScanConfig = {
@@ -26,6 +32,20 @@ export function ScanForm({ onStart }: ScanFormProps) {
   const [advanced, setAdvanced] = useState(false);
   const [authorized, setAuthorized] = useState(false);
   const [urlError, setUrlError] = useState("");
+  const [engineId, setEngineId] = useState("stub");
+  const [engines, setEngines] = useState<EngineOption[]>([{ id: "stub", name: "Built-in (demo)" }]);
+
+  useEffect(() => {
+    fetch("/api/engines")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.engines?.length) {
+          setEngines(d.engines);
+          setEngineId(d.engines[0].id);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const toggleStandard = (s: StandardCategory) => {
     setConfig(c => ({
@@ -54,7 +74,7 @@ export function ScanForm({ onStart }: ScanFormProps) {
   const handleStart = () => {
     if (!validateUrl(config.targetUrl)) return;
     if (!authorized) return;
-    onStart(config);
+    onStart({ config, authorized, engineId });
   };
 
   const activeChecks = VULNERABILITY_CHECKS.filter(c =>
@@ -125,6 +145,34 @@ export function ScanForm({ onStart }: ScanFormProps) {
               </button>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Scan Engine */}
+      <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+        <label className="block text-sm font-semibold text-slate-200 mb-3">Scan Engine</label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {engines.map((e) => {
+            const active = engineId === e.id;
+            const modes = e.capabilities?.mode?.join(" + ");
+            return (
+              <button
+                key={e.id}
+                onClick={() => setEngineId(e.id)}
+                className={cn(
+                  "p-3 rounded-xl border text-left transition-all cursor-pointer",
+                  active
+                    ? "bg-cyan-500/10 border-cyan-500/40"
+                    : "bg-slate-900 border-slate-700 hover:border-slate-600"
+                )}
+              >
+                <p className={cn("text-sm font-semibold", active ? "text-cyan-400" : "text-slate-200")}>
+                  {e.name}
+                </p>
+                {modes && <p className="text-xs text-slate-500 mt-0.5 capitalize">{modes} scan</p>}
+              </button>
+            );
+          })}
         </div>
       </div>
 
